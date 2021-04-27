@@ -92,7 +92,7 @@ def createdef(url,email=None,headless=True):
     except NoSuchElementException as e:
         # check if we need to sign in
         try:
-            if email:
+            if email != None:
                 __logger__(f'Signing in with {email:}...')
                 input_field = driver.find_element_by_id('i0116')
                 input_field.send_keys(email)
@@ -100,6 +100,19 @@ def createdef(url,email=None,headless=True):
                 btn.click()
                 time.sleep(5)
                 driver.find_element_by_class_name('aui-header')
+            elif email == None and headless != True:
+                msg = f"Confluence needs you to sign in, this process will wait for 2 minutes."
+                __logger__(msg)
+                countdown = 120
+                for i in range(1,7):
+                    time.sleep(20)
+                    try:
+                        driver.find_element_by_class_name('aui-header')
+                        break
+                    except NoSuchElementException as e:
+                        countdown -= 20
+                        print(f'{countdown:} seconds remaining...')
+                        continue
             else:
                 msg = f"Confluence needs you to sign in, try running with 'headless=False' or provide an email and try again."
                 __logger__(msg)
@@ -134,6 +147,7 @@ def createdef(url,email=None,headless=True):
     for table in tables:
         # find the table header and check for a column with correct column(s)
         thead = table.find('thead')
+        action_position = None
         column_mapping = None
         column_position = None
         description_position = None
@@ -179,60 +193,93 @@ def createdef(url,email=None,headless=True):
                         column_definition_positions['Description'] = i
                     else:
                         description_position = i
+                elif column_header == 'Action':
+                    action_position = i
 
         if column_mapping:
+            # if the table found is the mapping table, scrape the relevant data
             if not column_mapping_positions['Column']:
-                column_mapping_positions['Column'] = column_position
+                try:
+                    # if we don't have a column position for 'Column' add it
+                    if column_position:
+                        column_mapping_positions['Column'] = column_position
+                    else:
+                        raise ValueError('Unable to identify the Column')
+                except Exception as e:
+                    __logger__(e)
+                    return (0,e)
+
             tbody = table.find('tbody')
             for row in tbody:
-                index = None
-                for i, item in enumerate(config):
-                    if item['name'] == row.contents[column_mapping_positions['Column']].text.lower():
-                        index == i
-                        break
+                remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                # check the action for the column
+                # for each row in the table write out the column definition unless it has a remove action
+                if not remove:
+                    index = None
+                    for i, item in enumerate(config):
+                        if item['name'] == row.contents[column_mapping_positions['Column']].text.lower():
+                            index == i
+                            break
 
-                if index != None:
-                    column = item
-                else:
-                    column = {}
+                    if index != None:
+                        column = item
+                    else:
+                        column = {}
 
-                column["name"] = f"{row.contents[column_mapping_positions['Column']].text.lower()}"
-                column["type"] = f"{row.contents[column_mapping_positions['Data Type']].text.upper()}"
-                column["mode"] = f"{row.contents[column_mapping_positions['Nullable']].text.upper()}"
+                    column["name"] = f"{row.contents[column_mapping_positions['Column']].text.lower()}"
+                    column["type"] = f"{row.contents[column_mapping_positions['Data Type']].text.upper()}"
+                    column["mode"] = f"{row.contents[column_mapping_positions['Nullable']].text.upper()}"
 
-                if index == None:
-                    config.append(column)
+                    if index == None:
+                        config.append(column)
                     
         if column_definition:
             if not column_definition_positions['Column']:
+                try:
+                    # if we don't have a column position for 'Column' add it
+                    if column_position:
+                        column_definition_positions['Column'] = column_position
+                    else:
+                        raise ValueError('Unable to identify the Column')
+                except Exception as e:
+                    __logger__(e)
+                    return (0,e)
                 column_definition_positions['Column'] = column_position
             if not column_definition_positions['Description']:
-                column_definition_positions['Description'] = description_position
+                if description_position:
+                    column_definition_positions['Description'] = description_position
+                else:
+                    __logger__(f"Unable to locate description for '{row.contents[column_definition_positions['Column']].text.lower()}'")
+
             tbody = table.find('tbody')
             for row in tbody:
-                index = None
-                for i, item in enumerate(config):
-                    try:
-                        if item['name'] == row.contents[column_definition_positions['Column']].text:
-                            index = i
-                            break
-                    except TypeError as e:
-                        continue
-                    except Exception as e:
-                        __logger__(e)
-                        
+                remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                # check the action for the column
+                # for each row in the table write out the column definition unless it has a remove action
+                if not remove:
+                    index = None
+                    for i, item in enumerate(config):
+                        try:
+                            if item['name'] == row.contents[column_definition_positions['Column']].text:
+                                index = i
+                                break
+                        except TypeError as e:
+                            continue
+                        except Exception as e:
+                            __logger__(e)
+                            
 
-                if index != None:
-                    column = item
-                else:
-                    column = {}
+                    if index != None:
+                        column = item
+                    else:
+                        column = {}
 
-                column["name"] = f"{row.contents[column_definition_positions['Column']].text.lower()}"
-                column["description"] = f"{row.contents[column_definition_positions['Description']].text}"
-                column["poicyTags"] = {'names': [f"{row.contents[column_definition_positions['Data Element Type']].text}"]}
+                    column["name"] = f"{row.contents[column_definition_positions['Column']].text.lower()}"
+                    column["description"] = f"{row.contents[column_definition_positions['Description']].text}" if column_definition_positions['Description'] else ''
+                    column["poicyTags"] = {'names': [f"{row.contents[column_definition_positions['Data Element Type']].text}"]}
 
-                if index == None:
-                    config.append(column)
+                    if index == None:
+                        config.append(column)
     
     try:
         def_file = open(file_name,'w')
@@ -253,10 +300,12 @@ def createdef(url,email=None,headless=True):
 
 if __name__=='__main__':
     uri = 'https://confluence.bskyb.com/display/BusInt/dim_subscription_status%3A+DTA+Technical+Analysis'
-    email = 'sean.conkie@sky.uk'
-    headless = True
+    email = None
+    # email = 'sean.conkie@sky.uk'
+    # headless = True
+    headless = False
     createdef(uri,email,headless)
-    
+
     # uri = sys.argv[1] if len(sys.argv) > 1 else ''
     # email = None
     # headless = True
