@@ -211,7 +211,10 @@ def createdef(url,email=None,headless=True):
 
             tbody = table.find('tbody')
             for row in tbody:
-                remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                if action_position:
+                    remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                else:
+                    remove = None
                 # check the action for the column
                 # for each row in the table write out the column definition unless it has a remove action
                 if not remove:
@@ -253,7 +256,10 @@ def createdef(url,email=None,headless=True):
 
             tbody = table.find('tbody')
             for row in tbody:
-                remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                if action_position:
+                    remove = True if row.contents[column_mapping_positions[action_position]].text.lower() == 'removed' else None
+                else:
+                    remove = None
                 # check the action for the column
                 # for each row in the table write out the column definition unless it has a remove action
                 if not remove:
@@ -299,27 +305,27 @@ def createdef(url,email=None,headless=True):
     return (1,msg)
 
 if __name__=='__main__':
-    uri = 'https://confluence.bskyb.com/display/BusInt/dim_subscription_status%3A+DTA+Technical+Analysis'
-    email = None
-    # email = 'sean.conkie@sky.uk'
-    # headless = True
-    headless = False
-    createdef(uri,email,headless)
-
-    # uri = sys.argv[1] if len(sys.argv) > 1 else ''
+    # uri = 'https://confluence.bskyb.com/display/BusInt/dim_subscription_status%3A+DTA+Technical+Analysis'
     # email = None
-    # headless = True
-    # if len(sys.argv) > 2:
-    #     next_arg = sys.argv[2].split('=')
-    #     if next_arg[0] == 'email' and len(next_arg) > 1:
-    #         email = next_arg[1]
-    # if len(sys.argv) > 3:
-    #     if next_arg[0] == 'headless' and len(next_arg) > 1:
-    #         headless = next_arg[1]
+    # # email = 'sean.conkie@sky.uk'
+    # # headless = True
+    # headless = False
+    # createdef(uri,email,headless)
+
+    uri = sys.argv[1] if len(sys.argv) > 1 else ''
+    email = None
+    headless = True
+    if len(sys.argv) > 2:
+        next_arg = sys.argv[2].split('=')
+        if next_arg[0] == 'email' and len(next_arg) > 1:
+            email = next_arg[1]
+    if len(sys.argv) > 3:
+        if next_arg[0] == 'headless' and len(next_arg) > 1:
+            headless = next_arg[1]
 
 
-    # if uri == '':
-    #     msg = 'No url supplied.'
-    #     __logger__(msg)
-    # else:    
-    #     createdef(uri,email,headless)
+    if uri == '':
+        msg = 'No url supplied.'
+        __logger__(msg)
+    else:    
+        createdef(uri,email,headless)
